@@ -27,6 +27,7 @@ import org.elasticsearch.common.xcontent.support.XContentMapValues;
 import org.elasticsearch.index.engine.Engine.Create;
 import org.elasticsearch.index.engine.Engine.Delete;
 import org.elasticsearch.index.engine.Engine.Index;
+import org.elasticsearch.index.engine.Engine.Operation.Origin;
 import org.elasticsearch.index.indexing.IndexingOperationListener;
 import org.elasticsearch.index.shard.service.IndexShard;
 import org.elasticsearch.indices.IndicesLifecycle.Listener;
@@ -44,13 +45,13 @@ import com.pubnub.api.PubnubError;
 public class PubNubChanges {
   private static final ESLogger logger = Loggers.getLogger(PubNubChanges.class);
 
-  private final String pubnubPublishKey;
-  private final String pubnubSubscribeKey;
-  private final String pubnubSecretKey;
-  private final String pubnubCipherKey;
-  private final boolean pubnubUseSsl;
-  private final String pubnubChannel;
-  private final String pubnubUuid;
+  private String pubnubPublishKey;
+  private String pubnubSubscribeKey;
+  private String pubnubSecretKey;
+  private String pubnubCipherKey;
+  private boolean pubnubUseSsl;
+  private String pubnubChannel;
+  private String pubnubUuid;
 
   private volatile Pubnub pubnub;
   private final ElasticSearchPublishingCallback pnCallback = new ElasticSearchPublishingCallback();
@@ -60,20 +61,26 @@ public class PubNubChanges {
   public PubNubChanges(Settings rawSettings, Client client, IndicesService indicesService) {
     Map<String, Object> settings = rawSettings.getAsStructuredMap();
 
-    if (settings.containsKey("pubnub")) {
-      Map<String, Object> pubnubSettings = (Map<String, Object>) settings.get("pubnub");
-
-      pubnubPublishKey = XContentMapValues.nodeStringValue(pubnubSettings.get("publishKey"), null);
-      pubnubSubscribeKey =
-          XContentMapValues.nodeStringValue(pubnubSettings.get("subscribeKey"), null);
-      pubnubSecretKey = XContentMapValues.nodeStringValue(pubnubSettings.get("secretKey"), null);
-      pubnubCipherKey = XContentMapValues.nodeStringValue(pubnubSettings.get("cipherKey"), null);
-      pubnubUseSsl = XContentMapValues.nodeBooleanValue(pubnubSettings.get("useSsl"), true);
-      pubnubChannel = XContentMapValues.nodeStringValue(pubnubSettings.get("channel"), null);
-      pubnubUuid = XContentMapValues.nodeStringValue(pubnubSettings.get("uuid"), null);
-    } else {
-      throw new RuntimeException("Unable to initialize plugin: 'pubnub' config key missing");
+    if (!settings.containsKey("pubnub")) {
+      logger.info("ignoring pubnub changes plugin: 'pubnub' settings key not present");
+      return;
     }
+
+    Map<String, Object> pubnubSettings = (Map<String, Object>) settings.get("pubnub");
+
+    if (!XContentMapValues.nodeBooleanValue(pubnubSettings.get("enabled"), false)) {
+      logger.info("ignoring pubnub changes plugin: 'pubnub.enabled' is false or not present");
+      return;
+    }
+
+    pubnubPublishKey = XContentMapValues.nodeStringValue(pubnubSettings.get("publishKey"), null);
+    pubnubSubscribeKey =
+        XContentMapValues.nodeStringValue(pubnubSettings.get("subscribeKey"), null);
+    pubnubSecretKey = XContentMapValues.nodeStringValue(pubnubSettings.get("secretKey"), null);
+    pubnubCipherKey = XContentMapValues.nodeStringValue(pubnubSettings.get("cipherKey"), null);
+    pubnubUseSsl = XContentMapValues.nodeBooleanValue(pubnubSettings.get("useSsl"), true);
+    pubnubChannel = XContentMapValues.nodeStringValue(pubnubSettings.get("channel"), null);
+    pubnubUuid = XContentMapValues.nodeStringValue(pubnubSettings.get("uuid"), null);
 
     if (this.pubnubCipherKey != null && this.pubnubCipherKey.length() > 0) {
       this.pubnub =
@@ -113,6 +120,10 @@ public class PubNubChanges {
 
     @Override
     public void postCreate(Create create) {
+      if (!create.origin().equals(Origin.PRIMARY)) {
+        return;
+      }
+
       logger.trace("create {} {} {}", indexName, create.type(), create.id());
 
       try {
@@ -136,6 +147,10 @@ public class PubNubChanges {
 
     @Override
     public void postIndex(Index index) {
+      if (!index.origin().equals(Origin.PRIMARY)) {
+        return;
+      }
+
       logger.trace("index {} {} {}", indexName, index.type(), index.id());
 
       try {
@@ -159,6 +174,10 @@ public class PubNubChanges {
 
     @Override
     public void postDelete(Delete delete) {
+      if (!delete.origin().equals(Origin.PRIMARY)) {
+        return;
+      }
+
       logger.trace("delete {} {} {}", indexName, delete.type(), delete.id());
 
       try {
