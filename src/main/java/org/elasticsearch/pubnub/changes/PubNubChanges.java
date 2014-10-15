@@ -135,7 +135,7 @@ public class PubNubChanges {
         todo.put("id", create.id());
         todo.put("version", Long.toString(create.version()));
 
-        todo.put("_source", JSONObject.stringToValue(create.source().toUtf8()));
+        todo.put("_source", new JSONObject(create.source().toUtf8()));
 
         synchronized (pubnub) {
           pubnub.publish(PubNubChanges.this.pubnubChannel, todo, pnCallback);
@@ -162,7 +162,7 @@ public class PubNubChanges {
         todo.put("id", index.id());
         todo.put("version", Long.toString(index.version()));
 
-        todo.put("_source", JSONObject.stringToValue(index.source().toUtf8()));
+        todo.put("_source", new JSONObject(index.source().toUtf8()));
 
         synchronized (pubnub) {
           pubnub.publish(PubNubChanges.this.pubnubChannel, todo, pnCallback);
